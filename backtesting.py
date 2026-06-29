@@ -74,7 +74,7 @@ TARGET_MAP = {
 }
 PARENT_PATH = Path(__file__).parent  # 获取当前运行程序父路径
 # 优先离线使用pyecharts
-JS_HOST = str(PARENT_PATH.parent.parent / "pyecharts-assets" / "assets" / "v5") + "/"
+JS_HOST = str(PARENT_PATH.parent.parent / "pyecharts-assets" / "assets" / "v6") + "/"
 if Path(JS_HOST).exists():
     CurrentConfig.ONLINE_HOST = JS_HOST
 # 涨跌颜色设置
@@ -167,6 +167,34 @@ enhanced_title_opts = opts.TextStyleOpts(
     font_family="方正韵动中黑简体", 
     font_size=14,
 )
+
+# ECharts v6 在没有显式 title.left/textAlign 时，多行标题的默认锚点行为和 v5 不一致，
+# 会导致 account_info_binance.py 等脚本生成的标题看起来没有贴在图表最左侧。
+# account_info_binance.py 会复用本模块导入后的 pyecharts.options，因此在这里统一修正
+# TitleOpts 的默认值，可同时影响回测图表和账户信息图表。
+DEFAULT_TITLE_POS_LEFT = "0px"
+DEFAULT_TITLE_TEXT_ALIGN = "left"
+
+
+def _patch_pyecharts_title_opts() -> None:
+    """让未显式指定位置的 pyecharts 标题默认左对齐，兼容 ECharts v6。"""
+    if getattr(opts.TitleOpts, "_vnpy_left_title_patch", False):
+        return
+
+    original_init = opts.TitleOpts.__init__
+
+    def init_with_left_title(self, *args, **kwargs):
+        if kwargs.get("pos_left") is None and kwargs.get("pos_right") is None:
+            kwargs["pos_left"] = DEFAULT_TITLE_POS_LEFT
+        if kwargs.get("text_align") in (None, "auto"):
+            kwargs["text_align"] = DEFAULT_TITLE_TEXT_ALIGN
+        original_init(self, *args, **kwargs)
+
+    opts.TitleOpts.__init__ = init_with_left_title
+    opts.TitleOpts._vnpy_left_title_patch = True
+
+
+_patch_pyecharts_title_opts()
 
 enhanced_tooltip_opts = opts.TooltipOpts(
     trigger="item",
@@ -2339,26 +2367,7 @@ class BacktestingEngine:
                     border_radius=4,
                 ),
                 label_opts=label_opts,
-                emphasis_opts=opts.EmphasisOpts(
-                        focus="self",
-                        # 悬停文字样式
-                        label_opts=opts.LabelOpts(
-                            position='top',
-                            formatter=formatter,
-                            rich={
-                                'red': {'color': short_color},
-                                'green': {'color': long_color}
-                            },
-                            font_family="方正韵动中黑简体",
-                            font_size=18
-                        ),
-                        # 鼠标悬停放大图形
-                        itemstyle_opts=opts.ItemStyleOpts(
-                            color=js_color,
-                            border_color=short_color,
-                            border_width=2,
-                        )
-                    )
+                emphasis_opts=emphasis_opts
             )
             bar_5.set_global_opts(
                 title_opts=opts.TitleOpts(
@@ -2487,26 +2496,7 @@ class BacktestingEngine:
                     border_radius=4,
                 ),
                 label_opts=label_opts,
-                emphasis_opts=opts.EmphasisOpts(
-                        focus="self",
-                        # 悬停文字样式
-                        label_opts=opts.LabelOpts(
-                            position='top',
-                            formatter=formatter,
-                            rich={
-                                'red': {'color': short_color},
-                                'green': {'color': long_color}
-                            },
-                            font_family="方正韵动中黑简体",
-                            font_size=18
-                        ),
-                        # 鼠标悬停放大图形
-                        itemstyle_opts=opts.ItemStyleOpts(
-                            color=js_color,
-                            border_color=short_color,
-                            border_width=2,
-                        )
-                    )
+                emphasis_opts=emphasis_opts
             )
             bar_8.set_global_opts(
                 title_opts=opts.TitleOpts(
